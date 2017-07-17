@@ -19,9 +19,10 @@ git clone https://github.com/shounakitraj/Proxy.git /opt/Proxy
 
 The tool works on Python 2.7 and you should have mechanize installed. It requires following libraries to be installed,
 
-Library				Ubuntu							Windows
-BeautifulSoup		pip install BeautifulSoup		C:\Python27\Scripts\easy_install.exe BeautifulSoup
-mechanize			pip install mechanize			C:\Python27\Scripts\easy_install.exe mechanize
+|Library|Ubuntu|Windows|
+|----------|:-------------:|------:|
+|BeautifulSoup|pip install BeautifulSoup|C:\Python27\Scripts\easy_install.exe BeautifulSoup|
+|mechanize|pip install mechanize|C:\Python27\Scripts\easy_install.exe mechanize|
 
 
 Usage:
