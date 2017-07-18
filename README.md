@@ -1,6 +1,6 @@
-# Proxy
+# HTTP and HTTPS Proxy
 
-sslproxy.py - Web Application Proxy and XSS Scanner
+sslproxy.py - Web Application Proxy
 
 A tool by Shounak Itraj
 
@@ -30,17 +30,28 @@ Usage:
 1) Run sslproxy.py, this will run on 127.0.0.1:8081.
 2) Enter URL/Domain in browser where you have set the proxy.
 
-Payloads
-
-If you have found a XSS vulnerability, you can try the following payloads. http://pastebin.com/J1hCfL9J
-
 Description:
 
-1) The response and request headers will be stored in headers.txt in directory where your sslproxy.py file exists
-2) The response receieved from server will be stored in directory named with the Domain you are visiting. E.g. if you are visiting www.imdb.com, the toll will create directory named 'www.imdb.com' and response will be store in this directory.
-3) It also checks if there are any fields which have 'input' type as 'Text' in HTML page, if it finds any the HTML INPUT tag is stored in file with <domainname>.txt
-4) It also checks if the site is vulnerable to Reflected XSS by sending few XSS Payloads and checks if those are exactly present in response.
+Tool:
+This tool works as proxy server between web application and client. When Client tries to connect to server and when traffic comes to the tool. This tool stores request headers and send the traffic to server. When it gets response from server, the response is stored in directory format, where the directory name is the same name as Domain you are visiting. e.g. if you are visiting www.imdb.com, the toll will create directory named 'www.imdb.com' and response will be store in this directory.
 
+The request and response headers are stored in headers.txt file in the current directory.
+
+Plugins:
+You can also load plugins in this proxy, the only thing you need to do is, create some directory with your plugin name in 'plugins' directory. Then create file named '__init__.py'. Thus tool will automatically load your plugin and will show message on console like, 'Loading plugin xssfind'
+
+I have created few sample plugins as follows,
+1) xssfind - This plugin has two functions
+	a. FindText(htmldata, Filename) - The htmldata contains the response from server while 'Filename' is the domainname, which is required to create the file to store output of function in <Filename>.txt. This function will accept htmldata and render through data and check if there are any HTML INPUT tags which have 'Type=text" in it. If it finds any the output is stored in previously mentioned txt file.
+	b. FindXSS(link) - This functions accepts one parameter which is URL. This function will get the URL and check if it has any XSS vulnerable 'TextControl' present. In short it is extended version of FindText function where it also checks if INPUT tag of HTML haveing 'Tyep=text' is vulnerable to XSS vulnerability using few sample XSS Paylods. You can add your payloads and check.
+
+2) ReqHandle - This plugin is written to search and replace strings from Request headers or Req body. It contains two functions
+	a. RequestHandler(req,req_body,thread) - This function accepts 3 parameters as, request header, request body and curent thread. Created dictionary which contains list of strings and their respective replacbale value in key,value pair. This function returns Modified Request body and thread. This thread ID is used by ResponseHandler function to check the response from customer for same thread.
+ 
 NOTE:
 
-Mail me if you encounter any errors (shounakitraj@gmail.com). You can also post your problems on the website. I'll try my best to respond as soon as possible.
+Mail me if you encounter any errors (shounakitraj@gmail.com). I'll try my best to respond as soon as possible.
+
+
+
+

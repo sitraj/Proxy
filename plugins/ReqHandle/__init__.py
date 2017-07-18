@@ -13,7 +13,10 @@ def RequestHandler(req,req_body,thread):
     else:
         return None, None
             
+
 def ResponseHandler(req, req_body, res, res_body_plain, Thread, ThreadID):
+    pass
+'''
     #print Thread
     #print ThreadID
     if res_body_plain == '':
@@ -27,6 +30,4 @@ def ResponseHandler(req, req_body, res, res_body_plain, Thread, ThreadID):
             print "XSS found"
         else:
             print "No xss present"
-    
-                       
-        
+    '''
