@@ -1,19 +1,19 @@
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 import os
 import time
 from sys import platform
 from subprocess import PIPE, Popen
 import ssl
-from thread import get_ident
-import httplib
+from _thread import get_ident
+import http.client as httplib
 from bs4 import BeautifulSoup
-import urllib2
-import urlparse
+import urllib.request as urllib2
+import urllib.parse as urlparse
 import socket
-import imp
+import importlib.util
 import sys
-from stringhandler import StringHandler
+from classes.stringhandler import StringHandler
 PluginFolder = "./plugins"
 MainModule = "__init__"
 
@@ -24,17 +24,18 @@ def GetPlugins():
         location = os.path.join(PluginFolder, i)
         if not os.path.isdir(location) or not MainModule + ".py" in os.listdir(location):
             continue
-        info = imp.find_module(MainModule, [location])
-        plugins.append({"name": i, "info": info})
+        spec = importlib.util.spec_from_file_location(MainModule, os.path.join(location, MainModule + ".py"))
+        plugins.append({"name": i, "spec": spec})
     return plugins
 
 def LoadPlugin(plugin):
-    return imp.load_module(MainModule, *plugin["info"])
+    module = importlib.util.module_from_spec(plugin["spec"])
+    plugin["spec"].loader.exec_module(module)
+    return module
 
 for i in GetPlugins():
-    print ("Loading plugin "+i["name"])
+    print("Loading plugin " + i["name"])
     plugin = LoadPlugin(i)
-
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
     CAKey = 'ca.key'
@@ -42,11 +43,13 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     CertKey = 'cert.key'
     CertDir = 'certs/'
     timeout = 5
+    rbufsize = -1
+    wbufsize = 0
     
     lock = threading.Lock()
 
     if not os.path.isdir(CertDir):
-        os.makedirs(CertDir, 0755)
+        os.makedirs(CertDir, 0o755)
     
     def __init__(self, *args, **kwargs):
         self.tls = threading.local()
@@ -59,6 +62,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         else:
             sys.exit(0)
             return
+
     def ConnectIntercept(self):
         hostname = self.path.split(":")[0]
         CertPath = "%s/%s.crt" %(self.CertDir.rstrip('/'),hostname)
@@ -75,7 +79,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.CACert, "-CAkey", self.CAKey, "-set_serial", epoch, "-out", CertPath], stdin=p1.stdout, stderr=PIPE)
                     p2.communicate()
 
-        self.wfile.write("%s %d %s\r\n" %(self.protocol_version, 200, 'Connection Established'))
+        self.wfile.write(("%s %d %s\r\n" %(self.protocol_version, 200, 'Connection Established')).encode('utf-8'))
         self.end_headers()
         self.connection = ssl.wrap_socket(self.connection, keyfile=self.CertKey, certfile=CertPath, server_side=True)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
@@ -86,7 +90,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.close_connection = 0
         else:
             self.close_connection = 1
-            
 
     def do_GET(self):            
         Thread = get_ident()
@@ -94,31 +97,30 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         content_length = int(req.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
-        #print req.path
         time.sleep(2)
         if req.path[0] == '/':
             if isinstance(self.connection, ssl.SSLSocket):
                 rpath = req.path
                 req.path = "https://%s%s" %(req.headers['Host'], req.path)
                 conn = httplib.HTTPSConnection(req.headers['Host'])
-                conn.request("GET","%s"%rpath)
+                conn.request("GET", rpath)
                 res = conn.getresponse()
                 r1 = res.read()
-                soup = BeautifulSoup(r1,"html.parser")
+                soup = BeautifulSoup(r1.decode('utf-8', errors='ignore'), "html.parser")
                 plugin.FindText(soup, req.headers['Host'])
                 plugin.FindXSS(req.path)
             else:
                 req.path = "http://%s%s" %(req.headers['Host'], req.path)
                 url = urllib2.urlopen(req.path).read()
-                soup = BeautifulSoup(url,"html.parser")
+                soup = BeautifulSoup(url.decode('utf-8', errors='ignore'), "html.parser")
                 plugin.FindText(soup, req.headers['Host'])
                 plugin.FindXSS(req.path)
         elif req.path[:5] == "http:":
             url = urllib2.urlopen(req.path).read()
-            soup = BeautifulSoup(url, "html.parser")
+            soup = BeautifulSoup(url.decode('utf-8', errors='ignore'), "html.parser")
             plugin.FindText(soup, req.headers['Host'])
             plugin.FindXSS(req.path)
-        req_body_modified, ThreadID = plugin.RequestHandler(req,req_body, get_ident())
+        req_body_modified, ThreadID = plugin.RequestHandler(req, req_body, get_ident())
         if req_body_modified is False:
             self.send_error(403)
             return
@@ -138,13 +140,13 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             origin = (scheme, netloc)
             if not origin in self.tls.conns:
                 if scheme == 'https':
-                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout = self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
                 else:
                     self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
             
             host = req.headers.get('Host', '')
-            f = "%s" %("headers.txt")
+            f = "headers.txt"
             if not req.headers.get('Origin'):                
                 if not req.headers.get('Referer'):
                     myhost = conn.host
@@ -153,41 +155,40 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             elif req.headers.get('Origin'):
                 myhost = req.headers.get('Origin').rsplit('//')[1]
                 
-            head = open(f, "a+")
-            head.write("\n---------------------------------------------------------------------------------------------------------------\n        #####Request Header#####\n")
-            for line in req.headers.headers:
-                count = 0
-                for h in not_required:
-                    if h in line:
-                        count += 1
-                if count == 0:
-                    head.write(line)
-            conn.request(self.command, path, req_body, dict(req.headers))
-            res = conn.getresponse()
+            with open(f, "a+", encoding='utf-8') as head:
+                head.write("\n---------------------------------------------------------------------------------------------------------------\n        #####Request Header#####\n")
+                for line in req.headers.headers:
+                    count = 0
+                    for h in not_required:
+                        if h in line:
+                            count += 1
+                    if count == 0:
+                        head.write(line)
+                conn.request(self.command, path, req_body, dict(req.headers))
+                res = conn.getresponse()
+                
+                version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
+                
+                setattr(res, 'headers', res.msg)
+                setattr(res, 'response_version', version_table[res.version])
+                head.write("\n\n        #####Response Header#####\n")
+                for line in res.headers.headers:
+                    count = 0
+                    for h in not_required:
+                        if h in line:
+                            count += 1
+                    if count == 0:
+                        head.write(line)
+                if not 'Content-Length' in res.headers and 'no-store' in res.headers.get('Cache-Control', ''):
+                    plugin.ResponseHandler(req, req_body, req, '', '', '')
+                    setattr(res, 'headers', StringHandler().FilterHeaders(res.headers))
+                    self.RelayStreaming(res)
+                    with self.lock:
+                        self.SaveHandler(req, req_body, res, '')
+                    return
+                res_body = res.read()
             
-            version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
-            
-            setattr(res, 'headers', res.msg)
-            setattr(res, 'response_version', version_table[res.version])
-            head.write("\n\n        #####Response Header#####\n")
-            for line in res.headers.headers:
-                count = 0
-                for h in not_required:
-                    if h in line:
-                        count += 1
-                if count == 0:
-                    head.write(line)
-            if not 'Content-Length' in res.headers and 'no-store' in res.headers.get('Cache-Control' , ''):
-                plugin.ResponseHandler(req, req_body, req, '', '', '')
-                setattr(res, 'headers', StringHandler().FilterHeaders(res.headers))
-                self.RelayStreaming(res)
-                with self.lock:
-                    self.SaveHandler(req, req_body, res, '')
-                return
-            res_body = res.read()
-            
-        except Exception, e:
-            #print e
+        except Exception as e:
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
             self.send_error(502)
@@ -195,8 +196,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         
         content_encoding = res.headers.get('Content-Encoding', 'identity')
         res_body_plain = StringHandler().DecodeContentBody(res_body, content_encoding, conn.host, path, res.headers, req.headers, myhost)
-        #print Thread
-        #print ThreadID
         res_body_modified = plugin.ResponseHandler(req, req_body, res, res_body_plain, get_ident(), ThreadID)
         if res_body_modified is False:
             self.send_error(403)
@@ -208,19 +207,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         setattr(res, 'headers', StringHandler().FilterHeaders(res.headers))
 
-        self.wfile.write("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason))
+        self.wfile.write(("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason)).encode('utf-8'))
         for line in res.headers.headers:
-            self.wfile.write(line)
+            self.wfile.write(line.encode('utf-8'))
         self.end_headers()
         self.wfile.write(res_body)
         self.wfile.flush()
 
         with self.lock:
             self.SaveHandler(req, req_body, res, res_body_plain)
+
     def RelayStreaming(self, res):
-        self.wfile.write("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason))
+        self.wfile.write(("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason)).encode('utf-8'))
         for line in res.headers.headers:
-            self.wfile.write(line)
+            self.wfile.write(line.encode('utf-8'))
         self.end_headers()
         try:
             while True:
