@@ -7,6 +7,7 @@ A Python-based SSL proxy server that can intercept and analyze HTTP/HTTPS traffi
 - HTTP/HTTPS traffic interception
 - SSL certificate generation for HTTPS interception
 - XSS (Cross-Site Scripting) detection
+- Secret detection (API keys, passwords, tokens, etc.)
 - Input field analysis
 - Request/Response header logging
 - Content encoding/decoding support (gzip, deflate)
@@ -80,6 +81,7 @@ A Python-based SSL proxy server that can intercept and analyze HTTP/HTTPS traffi
 - `plugins/`
   - `xssfind/`: XSS detection plugin
   - `ReqHandle/`: Request handling plugin
+  - `secretdetect/`: Secret detection plugin
 - `certs/`: Directory for generated SSL certificates
 - `results/`: Directory for analysis results
 
@@ -87,12 +89,24 @@ A Python-based SSL proxy server that can intercept and analyze HTTP/HTTPS traffi
 
 The proxy server supports plugins for extending functionality. Plugins should be placed in the `plugins/` directory and follow the plugin interface defined in the project.
 
+### Built-in Plugins
+
+#### XSS Detection
+Scans for potential Cross-Site Scripting vulnerabilities in web applications.
+
+#### Secret Detection
+Identifies sensitive information such as API keys, passwords, tokens, and personal data in HTTP/HTTPS traffic.
+
+#### Request Handler
+Allows modification of requests before they are sent to the target server.
+
 ## Security Notes
 
 - This tool is for educational and debugging purposes only
 - Be cautious when using it on production systems
 - Always handle SSL certificates securely
 - Be aware of local security and privacy regulations when intercepting traffic
+- Be careful with detected secrets - ensure they are handled securely
 
 ## Contributing
 
